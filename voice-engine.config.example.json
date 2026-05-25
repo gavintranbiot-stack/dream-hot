@@ -1,0 +1,56 @@
+{
+  "chat": {
+    "baseUrl": "http://localhost:3000/api",
+    "apiKey": "",
+    "model": "qwen3"
+  },
+  "ttsEngine": {
+    "selectedProvider": "qwen"
+  },
+  "providers": [
+    {
+      "id": "mock",
+      "type": "mock",
+      "label": "Local Mock WAV",
+      "responseFormat": "wav"
+    },
+    {
+      "id": "qwen",
+      "type": "openai-compatible",
+      "label": "Qwen3-TTS",
+      "baseUrl": "http://localhost:8091/v1",
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+      "apiKey": "none",
+      "responseFormat": "wav"
+    },
+    {
+      "id": "openai",
+      "type": "openai",
+      "label": "OpenAI TTS",
+      "baseUrl": "https://api.openai.com/v1",
+      "model": "gpt-4o-mini-tts",
+      "apiKey": "",
+      "responseFormat": "mp3"
+    }
+  ],
+  "roles": [
+    {
+      "role": "narrator",
+      "displayName": "旁白",
+      "voice": "Uncle_Fu",
+      "instructions": "沉稳、叙事感强"
+    },
+    {
+      "role": "xiaoyu",
+      "displayName": "小雨",
+      "voice": "Vivian",
+      "instructions": "温柔但带一点惊讶"
+    },
+    {
+      "role": "aze",
+      "displayName": "阿泽",
+      "voice": "Ryan",
+      "instructions": "温柔、坚定、有少年感"
+    }
+  ]
+}
