@@ -4,11 +4,15 @@ import { z } from 'zod';
 import { getAudio, saveAudio } from './audioStore';
 import { generateScriptFromChat } from './chat';
 import { defaultConfig } from './config';
+import { analyzeNovelWithMiniMax } from './novel/minimaxAnalyzer';
 import { getTtsProvider } from './providers';
 import { buildVoiceJobs } from './synthesis/voiceJobs';
 import { parseScript } from '../shared/scriptParser';
+import { estimateSynthesisUsage } from '../shared/synthesisUsage';
 import type {
   RoleVoiceConfig,
+  ScriptEngineSettings,
+  ScriptProviderConfig,
   TtsEngineSettings,
   TtsProviderConfig,
   VoiceEngineConfig
@@ -36,11 +40,40 @@ app.post('/api/parse', (request, response) => {
 app.post('/api/chat-script', async (request, response, next) => {
   try {
     const body = chatScriptRequestSchema.parse(request.body);
+    const scriptProviders = body.scriptProviders ?? defaultConfig.scriptProviders;
+    const selectedScriptProvider =
+      body.scriptEngine?.selectedProvider ?? defaultConfig.scriptEngine.selectedProvider;
+    const scriptProvider =
+      body.scriptProvider ?? scriptProviders.find((provider) => provider.id === selectedScriptProvider);
     const result = await generateScriptFromChat(
       body.prompt,
       body.roles ?? defaultConfig.roles,
-      body.chat ?? defaultConfig.chat
+      scriptProvider ?? body.chat ?? defaultConfig.chat
     );
+    response.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/analyze-novel', async (request, response, next) => {
+  try {
+    const body = analyzeNovelRequestSchema.parse(request.body);
+    const scriptProviders =
+      body.scriptProviders && body.scriptProviders.length > 0
+        ? body.scriptProviders
+        : defaultConfig.scriptProviders;
+    const ttsProviders =
+      body.providers && body.providers.length > 0 ? body.providers : defaultConfig.providers;
+    const provider =
+      (body.scriptProvider?.id === 'minimax' ? body.scriptProvider : undefined) ??
+      scriptProviders.find((item) => item.id === 'minimax') ??
+      body.provider ??
+      ttsProviders.find((item) => item.id === 'minimax');
+    if (!provider) {
+      throw new Error('MiniMax provider is not configured.');
+    }
+    const result = await analyzeNovelWithMiniMax(body.novel, provider);
     response.json(result);
   } catch (error) {
     next(error);
@@ -56,6 +89,25 @@ app.post('/api/synthesize', async (request, response, next) => {
       body.ttsEngine?.selectedProvider ?? defaultConfig.ttsEngine.selectedProvider;
     const segments = body.segments ?? parseScript(body.script ?? '');
     const jobs = buildVoiceJobs(segments, roles, selectedProvider);
+    const selectedProviderConfig = providers.find((provider) => provider.id === selectedProvider);
+    if (!selectedProviderConfig) {
+      throw new Error(`No TTS provider configured for "${selectedProvider}".`);
+    }
+
+    const usage = estimateSynthesisUsage(jobs);
+    const miniMaxConfirmChars = miniMaxTtsConfirmChars();
+    if (
+      selectedProviderConfig.type === 'minimax' &&
+      usage.characters >= miniMaxConfirmChars &&
+      !body.confirmUsage
+    ) {
+      response.status(409).json({
+        error: `MiniMax synthesis would send ${usage.characters} characters across ${usage.segments} clips. Confirm before consuming TTS quota.`,
+        confirmationRequired: true,
+        usage
+      });
+      return;
+    }
 
     const synthesized = [];
     for (const job of jobs) {
@@ -126,7 +178,7 @@ const ttsEngineSchema = z.object({
 
 const providerSchema = z.object({
   id: z.string().min(1),
-  type: z.enum(['mock', 'openai', 'openai-compatible']),
+  type: z.enum(['mock', 'openai', 'openai-compatible', 'minimax']),
   label: z.string().min(1),
   baseUrl: z.string().optional(),
   apiKey: z.string().optional(),
@@ -150,10 +202,35 @@ const chatConfigSchema = z.object({
   model: z.string().optional()
 });
 
+const scriptEngineSchema = z.object({
+  selectedProvider: z.string().min(1)
+}) satisfies z.ZodType<ScriptEngineSettings>;
+
+const scriptProviderSchema = z.object({
+  id: z.string().min(1),
+  type: z.enum(['openai-compatible', 'minimax']),
+  label: z.string().min(1),
+  baseUrl: z.string().min(1),
+  apiKey: z.string().optional(),
+  model: z.string().optional()
+}) satisfies z.ZodType<ScriptProviderConfig>;
+
 const chatScriptRequestSchema = z.object({
   prompt: z.string().min(1),
   roles: z.array(roleVoiceConfigSchema).optional(),
-  chat: chatConfigSchema.optional()
+  chat: chatConfigSchema.optional(),
+  scriptEngine: scriptEngineSchema.optional(),
+  scriptProvider: scriptProviderSchema.optional(),
+  scriptProviders: z.array(scriptProviderSchema).optional()
+});
+
+const analyzeNovelRequestSchema = z.object({
+  novel: z.string().min(1),
+  provider: providerSchema.optional(),
+  providers: z.array(providerSchema).optional(),
+  scriptEngine: scriptEngineSchema.optional(),
+  scriptProvider: scriptProviderSchema.optional(),
+  scriptProviders: z.array(scriptProviderSchema).optional()
 });
 
 const synthesizeRequestSchema = z.object({
@@ -161,5 +238,11 @@ const synthesizeRequestSchema = z.object({
   segments: z.array(segmentSchema).optional(),
   roles: z.array(roleVoiceConfigSchema).optional(),
   ttsEngine: ttsEngineSchema.optional(),
-  providers: z.array(providerSchema).optional()
-}) satisfies z.ZodType<Partial<VoiceEngineConfig> & { script?: string }>;
+  providers: z.array(providerSchema).optional(),
+  confirmUsage: z.boolean().optional()
+}) satisfies z.ZodType<Partial<VoiceEngineConfig> & { script?: string; confirmUsage?: boolean }>;
+
+function miniMaxTtsConfirmChars(): number {
+  const value = Number(process.env.MINIMAX_TTS_CONFIRM_CHARS ?? 1000);
+  return Number.isFinite(value) && value > 0 ? value : 1000;
+}

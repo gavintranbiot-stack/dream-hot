@@ -1,6 +1,6 @@
 # Dream Hot Voice Engine
 
-Configurable multi-role TTS web app for OpenWebUI/OpenAI-compatible chat, Qwen3-TTS, and OpenAI TTS.
+Configurable multi-role TTS web app for MiniMax, OpenWebUI/OpenAI-compatible chat, Qwen3-TTS, and OpenAI TTS.
 
 ## What It Does
 
@@ -9,8 +9,10 @@ Configurable multi-role TTS web app for OpenWebUI/OpenAI-compatible chat, Qwen3-
 - Splits TTS into two settings layers: one active engine, plus per-conversation role voices.
 - Maps each conversation role to a configurable voice and delivery instructions.
 - Generates one audio clip per segment, then plays the clips as an ordered queue.
+- Uses MiniMax text generation to analyze novel prose into multi-character script segments.
 - Supports:
   - Local mock WAV output for no-key testing.
+  - MiniMax text analysis and MiniMax Speech T2A.
   - Qwen3-TTS through an OpenAI-compatible `/v1/audio/speech` endpoint.
   - OpenAI TTS through the official `/v1/audio/speech` endpoint.
   - OpenWebUI or any OpenAI-compatible chat endpoint for script generation.
@@ -28,6 +30,32 @@ Open:
 - API: `http://localhost:8787`
 
 The default active TTS engine is `mock`, so the app works before you configure real TTS.
+
+## MiniMax Novel + TTS
+
+Create `.env` from `.env.example` and set:
+
+```bash
+SCRIPT_PROVIDER=minimax
+MINIMAX_API_KEY=your-token-plan-or-platform-api-key
+MINIMAX_BASE_URL=https://api.minimaxi.com/v1
+MINIMAX_TEXT_MODEL=MiniMax-M2.7
+MINIMAX_ANALYSIS_MAX_TOKENS=12000
+MINIMAX_TTS_MODEL=speech-2.8-hd
+MINIMAX_TTS_CONFIRM_CHARS=1000
+```
+
+Use `https://api.minimaxi.com/v1` for MiniMax China Token Plan keys and `https://api.minimax.io/v1` for international MiniMax keys.
+
+Then use:
+
+- `Script Generator`: select `MiniMax M2.7` to generate role-labeled scripts from an idea prompt.
+- `Analyze Novel`: sends the text in the Script box to MiniMax text generation and converts it into role segments.
+- `Active TTS Engine: MiniMax Speech`: synthesizes each segment through `POST /v1/t2a_v2`.
+
+MiniMax Token Plan Speech 2.8 quota is character-based. The app estimates the total characters before MiniMax synthesis and asks for confirmation before larger runs.
+
+MiniMax TTS voice IDs are provider-specific. Good China endpoint starting voices include `male-qn-jingying`, `female-shaonv`, `male-qn-qingse`, `female-yujie`, and `female-chengshu`.
 
 ## Qwen3-TTS Provider
 
@@ -69,7 +97,9 @@ Set `Active TTS Engine` to `OpenAI TTS` in the web UI.
 
 Engine settings are global for the current synthesis run:
 
-- `ttsEngine.selectedProvider`: which TTS engine to use, such as `mock`, `qwen`, or `openai`.
+- `scriptEngine.selectedProvider`: which LLM provider the script generator uses, such as `minimax` or `openwebui`.
+- `scriptProviders`: connection details for script generation models, such as Base URL, model, and API key.
+- `ttsEngine.selectedProvider`: which TTS engine to use, such as `mock`, `minimax`, `qwen`, or `openai`.
 - `providers`: connection details for each engine, such as Base URL, model, API key, and response format.
 
 Conversation voice settings are scoped to the current script or dialogue:

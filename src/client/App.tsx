@@ -2,6 +2,7 @@ import {
   Bot,
   Braces,
   Cable,
+  BookOpen,
   Loader2,
   Mic2,
   Play,
@@ -13,22 +14,73 @@ import {
   WandSparkles
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { parseScript } from '../shared/scriptParser';
+import { estimateSynthesisUsage } from '../shared/synthesisUsage';
 import type {
   ChatConfig,
+  NovelAnalysisResult,
   RoleVoiceConfig,
+  ScriptEngineSettings,
   ScriptSegment,
+  ScriptProviderConfig,
   SynthesizedSegment,
   TtsEngineSettings,
   TtsProviderConfig,
   VoiceEngineConfig
 } from '../shared/types';
 
-const sampleScript = `旁白：夜色很深，楼道里的灯忽明忽暗。
-小雨：你终于来了。
-阿泽：我一直都在，只是你没有回头。`;
+const sampleScript = `凌晨一点四十七分，顾行推开观测站的金属门时，山顶的风正贴着地面掠过。远处的射电天线一座座立在夜色里，像沉默的白色巨人。
+
+值班员沈禾从控制台前抬起头：“你就是顾博士？”
+
+“是我。”顾行摘下手套，声音有些发紧，“我申请过一次临时观测。我要看宇宙微波背景辐射。”
+
+沈禾愣了一下：“现在？这个时段的窗口很短，而且数据噪声很重。”
+
+“我知道。”顾行走到主屏幕前，“只要能看到实时曲线就行。”
+
+老工程师陆岑从设备间出来，手里还拿着半杯冷掉的咖啡。“年轻人，你大半夜跑到这里，不会只是为了看一条几乎不动的背景曲线吧？”
+
+顾行没有回答。他从口袋里取出一张纸，上面写满了密密麻麻的数字。沈禾看了一眼，忽然皱起眉：“这些是时间点？”
+
+“倒计时。”顾行说。
+
+控制室安静下来，只剩机柜里的风扇低声转动。陆岑把咖啡放下，走到另一台终端前：“接入三号天线阵列，过滤本地干扰，保留背景辐射主频段。”
+
+沈禾敲下指令。几秒钟后，屏幕上出现了一条近乎平直的蓝色曲线。
+
+“这就是你要看的东西。”她说，“宇宙背景辐射，正常得不能再正常。”
+
+顾行盯着屏幕右下角的时间。倒计时还剩十秒。
+
+九。八。七。
+
+陆岑忽然直起身：“等等，基线在抖。”
+
+沈禾迅速放大曲线：“不可能，这个幅度太明显了。”
+
+六。五。四。
+
+蓝色曲线开始有节奏地起伏，像某种巨大而遥远的灯光正在黑暗中一明一灭。整个控制室被屏幕映成幽蓝色。
+
+顾行低声说：“它开始了。”
+
+沈禾的手停在键盘上：“这不是设备误差。三号阵列、七号阵列、十一号阵列都观测到了同样的变化。”
+
+陆岑的脸色变了：“如果这些数据是真的，那就不是某个方向的信号，而是整个天空背景都在同步变化。”
+
+顾行闭了闭眼：“也就是说，不是某颗星在闪。”
+
+沈禾看向他：“那是什么？”
+
+顾行没有立刻回答。窗外，天线阵列缓慢转动，指向更深的夜空。许久之后，他才说：“是宇宙本身。”`;
 
 export function App() {
   const [chat, setChat] = useState<ChatConfig>({ baseUrl: '', apiKey: '', model: '' });
+  const [scriptEngine, setScriptEngine] = useState<ScriptEngineSettings>({
+    selectedProvider: 'minimax'
+  });
+  const [scriptProviders, setScriptProviders] = useState<ScriptProviderConfig[]>([]);
   const [ttsEngine, setTtsEngine] = useState<TtsEngineSettings>({ selectedProvider: 'mock' });
   const [providers, setProviders] = useState<TtsProviderConfig[]>([]);
   const [roles, setRoles] = useState<RoleVoiceConfig[]>([]);
@@ -50,11 +102,19 @@ export function App() {
     [providers, ttsEngine.selectedProvider]
   );
   const activeProvider = activeProviderIndex >= 0 ? providers[activeProviderIndex] : undefined;
+  const activeScriptProviderIndex = useMemo(
+    () => scriptProviders.findIndex((provider) => provider.id === scriptEngine.selectedProvider),
+    [scriptProviders, scriptEngine.selectedProvider]
+  );
+  const activeScriptProvider =
+    activeScriptProviderIndex >= 0 ? scriptProviders[activeScriptProviderIndex] : undefined;
 
   async function loadConfig() {
     const response = await fetch('/api/config');
     const config = (await response.json()) as VoiceEngineConfig;
     setChat(config.chat);
+    setScriptEngine(config.scriptEngine);
+    setScriptProviders(config.scriptProviders);
     setTtsEngine(config.ttsEngine);
     setProviders(config.providers);
     setRoles(config.roles);
@@ -86,7 +146,14 @@ export function App() {
       const response = await fetch('/api/chat-script', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: ideaPrompt, roles, chat })
+        body: JSON.stringify({
+          prompt: ideaPrompt,
+          roles,
+          chat,
+          scriptEngine,
+          scriptProvider: activeScriptProvider,
+          scriptProviders
+        })
       });
       const payload = (await response.json()) as {
         content?: string;
@@ -104,13 +171,60 @@ export function App() {
     }
   }
 
+  async function analyzeNovelWithMiniMax() {
+    setIsBusy(true);
+    try {
+      const miniMaxProvider =
+        (activeScriptProvider?.id === 'minimax' ? activeScriptProvider : undefined) ??
+        scriptProviders.find((provider) => provider.id === 'minimax');
+
+      const response = await fetch('/api/analyze-novel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          novel: script,
+          scriptEngine,
+          scriptProvider: miniMaxProvider,
+          scriptProviders: scriptProviders.length > 0 ? scriptProviders : undefined
+        })
+      });
+      const payload = (await response.json()) as NovelAnalysisResult & { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? 'Novel analysis failed');
+
+      setRoles(payload.roles);
+      setSegments(payload.segments);
+      setScript(formatSegmentsAsScript(payload.segments, payload.roles));
+      setTtsEngine({ selectedProvider: 'minimax' });
+      setStatus(`Analyzed ${payload.segments.length} novel segments`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Novel analysis failed');
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
   async function synthesize() {
     setIsBusy(true);
     try {
+      const plannedSegments = segments.length > 0 ? segments : parseScript(script);
+      const usage = estimateSynthesisUsage(plannedSegments);
+      const confirmUsage = confirmMiniMaxSynthesis(activeProvider, usage);
+      if (confirmUsage === false) {
+        setStatus(`Canceled synthesis for ${usage.characters} MiniMax characters`);
+        return;
+      }
+
       const response = await fetch('/api/synthesize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ script, roles, providers, ttsEngine })
+        body: JSON.stringify({
+          script,
+          segments: plannedSegments.length > 0 ? plannedSegments : undefined,
+          roles,
+          providers,
+          ttsEngine,
+          confirmUsage
+        })
       });
       const payload = (await response.json()) as {
         segments?: SynthesizedSegment[];
@@ -133,10 +247,16 @@ export function App() {
       {
         role: `role_${current.length + 1}`,
         displayName: '新角色',
-        voice: 'Vivian',
+        voice: defaultVoiceForProvider(ttsEngine.selectedProvider),
         instructions: ''
       }
     ]);
+  }
+
+  function updateScript(value: string) {
+    setScript(value);
+    setSegments([]);
+    setAudioSegments([]);
   }
 
   function updateRole(index: number, patch: Partial<RoleVoiceConfig>) {
@@ -151,6 +271,14 @@ export function App() {
 
   function updateProvider(index: number, patch: Partial<TtsProviderConfig>) {
     setProviders((current) =>
+      current.map((provider, providerIndex) =>
+        providerIndex === index ? { ...provider, ...patch } : provider
+      )
+    );
+  }
+
+  function updateScriptProvider(index: number, patch: Partial<ScriptProviderConfig>) {
+    setScriptProviders((current) =>
       current.map((provider, providerIndex) =>
         providerIndex === index ? { ...provider, ...patch } : provider
       )
@@ -181,7 +309,7 @@ export function App() {
       <section className="topbar">
         <div>
           <h1>Dream Hot Voice Engine</h1>
-          <p>Multi-role TTS orchestration for OpenWebUI, Qwen3-TTS, and OpenAI TTS.</p>
+          <p>Multi-role script generation and TTS orchestration for MiniMax, OpenWebUI, Qwen3-TTS, and OpenAI TTS.</p>
         </div>
         <div className="status-pill">
           {isBusy ? <Loader2 className="spin" size={16} /> : <Radio size={16} />}
@@ -240,25 +368,47 @@ export function App() {
           )}
 
           <PanelTitle icon={<Cable size={18} />} title="Script Generator" />
-          <Field
-            label="Base URL"
-            value={chat.baseUrl}
-            placeholder="http://localhost:3000/api"
-            onChange={(value) => setChat({ ...chat, baseUrl: value })}
-          />
-          <Field
-            label="Model"
-            value={chat.model ?? ''}
-            placeholder="qwen3"
-            onChange={(value) => setChat({ ...chat, model: value })}
-          />
-          <Field
-            label="API Key"
-            value={chat.apiKey ?? ''}
-            placeholder="optional"
-            type="password"
-            onChange={(value) => setChat({ ...chat, apiKey: value })}
-          />
+          <label className="field">
+            <span>LLM Provider</span>
+            <select
+              value={scriptEngine.selectedProvider}
+              onChange={(event) => setScriptEngine({ selectedProvider: event.target.value })}
+              aria-label="Script Generator Provider"
+            >
+              {scriptProviders.map((provider) => (
+                <option value={provider.id} key={provider.id}>
+                  {provider.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {activeScriptProvider && (
+            <div className="provider-row">
+              <div className="provider-head">
+                <strong>{activeScriptProvider.label}</strong>
+                <code>{activeScriptProvider.id}</code>
+              </div>
+              <Field
+                label="Base URL"
+                value={activeScriptProvider.baseUrl}
+                placeholder="https://api.minimaxi.com/v1"
+                onChange={(value) => updateScriptProvider(activeScriptProviderIndex, { baseUrl: value })}
+              />
+              <Field
+                label="Model"
+                value={activeScriptProvider.model ?? ''}
+                placeholder="MiniMax-M2.7"
+                onChange={(value) => updateScriptProvider(activeScriptProviderIndex, { model: value })}
+              />
+              <Field
+                label="API Key"
+                value={activeScriptProvider.apiKey ?? ''}
+                placeholder="optional"
+                type="password"
+                onChange={(value) => updateScriptProvider(activeScriptProviderIndex, { apiKey: value })}
+              />
+            </div>
+          )}
         </aside>
 
         <section className="workspace">
@@ -266,6 +416,10 @@ export function App() {
             <button onClick={parseCurrentScript} disabled={isBusy}>
               <Braces size={17} />
               Parse
+            </button>
+            <button onClick={analyzeNovelWithMiniMax} disabled={isBusy}>
+              <BookOpen size={17} />
+              Analyze Novel
             </button>
             <button className="primary" onClick={synthesize} disabled={isBusy}>
               <Volume2 size={17} />
@@ -280,7 +434,7 @@ export function App() {
           <div className="editor-grid">
             <section className="panel script-panel">
               <PanelTitle icon={<Bot size={18} />} title="Script" />
-              <textarea value={script} onChange={(event) => setScript(event.target.value)} />
+              <textarea value={script} onChange={(event) => updateScript(event.target.value)} />
             </section>
 
             <section className="panel">
@@ -292,7 +446,7 @@ export function App() {
               />
               <button onClick={generateScriptWithChat} disabled={isBusy}>
                 <WandSparkles size={17} />
-                Generate JSON Script
+                Generate Script
               </button>
             </section>
           </div>
@@ -367,6 +521,36 @@ export function App() {
         </section>
       </section>
     </main>
+  );
+}
+
+function formatSegmentsAsScript(segments: ScriptSegment[], roles: RoleVoiceConfig[]) {
+  const displayNames = new Map(roles.map((role) => [role.role, role.displayName]));
+  return segments
+    .map((segment) => `${displayNames.get(segment.role) ?? segment.role}：${segment.text}`)
+    .join('\n');
+}
+
+function defaultVoiceForProvider(providerId: string): string {
+  if (providerId === 'minimax') return 'female-shaonv';
+  if (providerId === 'openai') return 'alloy';
+  return 'Vivian';
+}
+
+function confirmMiniMaxSynthesis(
+  provider: TtsProviderConfig | undefined,
+  usage: { segments: number; characters: number }
+): boolean | undefined {
+  if (provider?.type !== 'minimax' || usage.characters === 0) {
+    return undefined;
+  }
+
+  return window.confirm(
+    [
+      `MiniMax Speech 2.8 will synthesize ${usage.characters} characters across ${usage.segments} clips.`,
+      'Token Plan Plus includes 4,000 Speech 2.8 characters per day.',
+      'Continue and consume TTS quota?'
+    ].join('\n')
   );
 }
 

@@ -4,8 +4,29 @@
     "apiKey": "",
     "model": "qwen3"
   },
+  "scriptEngine": {
+    "selectedProvider": "minimax"
+  },
+  "scriptProviders": [
+    {
+      "id": "openwebui",
+      "type": "openai-compatible",
+      "label": "OpenWebUI",
+      "baseUrl": "http://localhost:3000/api",
+      "apiKey": "",
+      "model": "qwen3"
+    },
+    {
+      "id": "minimax",
+      "type": "minimax",
+      "label": "MiniMax M2.7",
+      "baseUrl": "https://api.minimaxi.com/v1",
+      "apiKey": "",
+      "model": "MiniMax-M2.7"
+    }
+  ],
   "ttsEngine": {
-    "selectedProvider": "qwen"
+    "selectedProvider": "minimax"
   },
   "providers": [
     {
@@ -31,25 +52,34 @@
       "model": "gpt-4o-mini-tts",
       "apiKey": "",
       "responseFormat": "mp3"
+    },
+    {
+      "id": "minimax",
+      "type": "minimax",
+      "label": "MiniMax Speech",
+      "baseUrl": "https://api.minimaxi.com/v1",
+      "model": "speech-2.8-hd",
+      "apiKey": "",
+      "responseFormat": "mp3"
     }
   ],
   "roles": [
     {
       "role": "narrator",
       "displayName": "旁白",
-      "voice": "Uncle_Fu",
+      "voice": "male-qn-jingying",
       "instructions": "沉稳、叙事感强"
     },
     {
       "role": "xiaoyu",
       "displayName": "小雨",
-      "voice": "Vivian",
+      "voice": "female-shaonv",
       "instructions": "温柔但带一点惊讶"
     },
     {
       "role": "aze",
       "displayName": "阿泽",
-      "voice": "Ryan",
+      "voice": "male-qn-qingse",
       "instructions": "温柔、坚定、有少年感"
     }
   ]

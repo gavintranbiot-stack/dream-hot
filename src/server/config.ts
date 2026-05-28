@@ -6,6 +6,27 @@ export const defaultConfig: VoiceEngineConfig = {
     apiKey: process.env.OPENWEBUI_API_KEY ?? '',
     model: process.env.OPENWEBUI_MODEL ?? ''
   },
+  scriptEngine: {
+    selectedProvider: process.env.SCRIPT_PROVIDER ?? 'minimax'
+  },
+  scriptProviders: [
+    {
+      id: 'openwebui',
+      type: 'openai-compatible',
+      label: 'OpenWebUI',
+      baseUrl: process.env.OPENWEBUI_BASE_URL ?? 'http://localhost:3000/api',
+      apiKey: process.env.OPENWEBUI_API_KEY ?? '',
+      model: process.env.OPENWEBUI_MODEL ?? ''
+    },
+    {
+      id: 'minimax',
+      type: 'minimax',
+      label: 'MiniMax M2.7',
+      baseUrl: process.env.MINIMAX_BASE_URL ?? 'https://api.minimaxi.com/v1',
+      apiKey: process.env.MINIMAX_API_KEY ?? '',
+      model: process.env.MINIMAX_TEXT_MODEL ?? 'MiniMax-M2.7'
+    }
+  ],
   ttsEngine: {
     selectedProvider: process.env.TTS_PROVIDER ?? 'mock'
   },
@@ -33,25 +54,34 @@ export const defaultConfig: VoiceEngineConfig = {
       apiKey: process.env.OPENAI_API_KEY ?? '',
       model: process.env.OPENAI_TTS_MODEL ?? 'gpt-4o-mini-tts',
       responseFormat: 'mp3'
+    },
+    {
+      id: 'minimax',
+      type: 'minimax',
+      label: 'MiniMax Speech',
+      baseUrl: process.env.MINIMAX_BASE_URL ?? 'https://api.minimaxi.com/v1',
+      apiKey: process.env.MINIMAX_API_KEY ?? '',
+      model: process.env.MINIMAX_TTS_MODEL ?? 'speech-2.8-hd',
+      responseFormat: 'mp3'
     }
   ],
   roles: [
     {
       role: 'narrator',
       displayName: '旁白',
-      voice: 'Uncle_Fu',
+      voice: 'male-qn-jingying',
       instructions: '沉稳、叙事感强'
     },
     {
       role: 'xiaoyu',
       displayName: '小雨',
-      voice: 'Vivian',
+      voice: 'female-shaonv',
       instructions: '温柔但带一点惊讶'
     },
     {
       role: 'aze',
       displayName: '阿泽',
-      voice: 'Ryan',
+      voice: 'male-qn-qingse',
       instructions: '温柔、坚定、有少年感'
     }
   ]

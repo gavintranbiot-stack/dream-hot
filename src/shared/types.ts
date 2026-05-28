@@ -28,7 +28,22 @@ export interface ChatConfig {
   model?: string;
 }
 
-export type TtsProviderType = 'mock' | 'openai' | 'openai-compatible';
+export type ScriptProviderType = 'openai-compatible' | 'minimax';
+
+export interface ScriptProviderConfig {
+  id: string;
+  type: ScriptProviderType;
+  label: string;
+  baseUrl: string;
+  apiKey?: string;
+  model?: string;
+}
+
+export interface ScriptEngineSettings {
+  selectedProvider: string;
+}
+
+export type TtsProviderType = 'mock' | 'openai' | 'openai-compatible' | 'minimax';
 
 export interface TtsProviderConfig {
   id: string;
@@ -46,6 +61,8 @@ export interface TtsEngineSettings {
 
 export interface VoiceEngineConfig {
   chat: ChatConfig;
+  scriptEngine: ScriptEngineSettings;
+  scriptProviders: ScriptProviderConfig[];
   ttsEngine: TtsEngineSettings;
   providers: TtsProviderConfig[];
   roles: RoleVoiceConfig[];
@@ -55,4 +72,9 @@ export interface SynthesizedSegment {
   job: VoiceJob;
   audioUrl: string;
   contentType: string;
+}
+
+export interface NovelAnalysisResult {
+  segments: ScriptSegment[];
+  roles: RoleVoiceConfig[];
 }
