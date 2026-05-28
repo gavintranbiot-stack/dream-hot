@@ -14,6 +14,7 @@ import {
   WandSparkles
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { defaultNovel } from './defaultNovel';
 import { parseScript } from '../shared/scriptParser';
 import { estimateSynthesisUsage } from '../shared/synthesisUsage';
 import type {
@@ -29,52 +30,6 @@ import type {
   VoiceEngineConfig
 } from '../shared/types';
 
-const sampleScript = `凌晨一点四十七分，顾行推开观测站的金属门时，山顶的风正贴着地面掠过。远处的射电天线一座座立在夜色里，像沉默的白色巨人。
-
-值班员沈禾从控制台前抬起头：“你就是顾博士？”
-
-“是我。”顾行摘下手套，声音有些发紧，“我申请过一次临时观测。我要看宇宙微波背景辐射。”
-
-沈禾愣了一下：“现在？这个时段的窗口很短，而且数据噪声很重。”
-
-“我知道。”顾行走到主屏幕前，“只要能看到实时曲线就行。”
-
-老工程师陆岑从设备间出来，手里还拿着半杯冷掉的咖啡。“年轻人，你大半夜跑到这里，不会只是为了看一条几乎不动的背景曲线吧？”
-
-顾行没有回答。他从口袋里取出一张纸，上面写满了密密麻麻的数字。沈禾看了一眼，忽然皱起眉：“这些是时间点？”
-
-“倒计时。”顾行说。
-
-控制室安静下来，只剩机柜里的风扇低声转动。陆岑把咖啡放下，走到另一台终端前：“接入三号天线阵列，过滤本地干扰，保留背景辐射主频段。”
-
-沈禾敲下指令。几秒钟后，屏幕上出现了一条近乎平直的蓝色曲线。
-
-“这就是你要看的东西。”她说，“宇宙背景辐射，正常得不能再正常。”
-
-顾行盯着屏幕右下角的时间。倒计时还剩十秒。
-
-九。八。七。
-
-陆岑忽然直起身：“等等，基线在抖。”
-
-沈禾迅速放大曲线：“不可能，这个幅度太明显了。”
-
-六。五。四。
-
-蓝色曲线开始有节奏地起伏，像某种巨大而遥远的灯光正在黑暗中一明一灭。整个控制室被屏幕映成幽蓝色。
-
-顾行低声说：“它开始了。”
-
-沈禾的手停在键盘上：“这不是设备误差。三号阵列、七号阵列、十一号阵列都观测到了同样的变化。”
-
-陆岑的脸色变了：“如果这些数据是真的，那就不是某个方向的信号，而是整个天空背景都在同步变化。”
-
-顾行闭了闭眼：“也就是说，不是某颗星在闪。”
-
-沈禾看向他：“那是什么？”
-
-顾行没有立刻回答。窗外，天线阵列缓慢转动，指向更深的夜空。许久之后，他才说：“是宇宙本身。”`;
-
 export function App() {
   const [chat, setChat] = useState<ChatConfig>({ baseUrl: '', apiKey: '', model: '' });
   const [scriptEngine, setScriptEngine] = useState<ScriptEngineSettings>({
@@ -84,7 +39,7 @@ export function App() {
   const [ttsEngine, setTtsEngine] = useState<TtsEngineSettings>({ selectedProvider: 'mock' });
   const [providers, setProviders] = useState<TtsProviderConfig[]>([]);
   const [roles, setRoles] = useState<RoleVoiceConfig[]>([]);
-  const [script, setScript] = useState(sampleScript);
+  const [script, setScript] = useState(defaultNovel);
   const [ideaPrompt, setIdeaPrompt] = useState('写一段三人短剧，旁白、小雨、阿泽轮流说话。');
   const [segments, setSegments] = useState<ScriptSegment[]>([]);
   const [audioSegments, setAudioSegments] = useState<SynthesizedSegment[]>([]);
